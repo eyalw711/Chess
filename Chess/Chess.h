@@ -6,6 +6,7 @@
 #include <stdlib.h>
 #include <assert.h>     /* assert */
 #include <time.h>
+#include <ctype.h>
 
 
 
@@ -32,6 +33,13 @@
 #define BLACK_K 'K'
 #define EMPTY ' '
 
+#define PAWN "pawn"		//pawn		hayal
+#define BISHOP "bishop"		//bishop	ratz
+#define KNIGHT "knight"		//knight	parash
+#define ROOK "rook"		//rook		tzariakh
+#define QUEEN "queen"		//queen		malka
+#define KING "king"		//king		melekh
+
 #define WHITE "white"
 #define BLACK "black"
 
@@ -53,6 +61,8 @@ typedef char** board_t;
 #define WRONG_POSITION "Invalid position on the board\n"
 #define NO_PIECE "Setting this piece creates an invalid board\n"  
 #define WROND_BOARD_INITIALIZATION "Wrong board initialization\n"
+#define WHT_ENTER_YOUR_MOVE "white player - enter your move:\n"
+#define BLK_ENTER_YOUR_MOVE "black player - enter your move:\n"
 
 #define ILLEGAL_COMMAND "Illegal command, please try again\n"
 #define ILLEGAL_MOVE "Illegal move\n"
@@ -61,11 +71,14 @@ typedef char** board_t;
 #define ILLEGAL_CALTLING_MOVE "Illegal castling move\n"  
 
 #define TIE "The game ends in a tie\n"
+#define NOT_YOUR_PIECE "The specified position does not contain your piece\n"
 
 #define perror_message(func_name) (fprintf(stderr, "Error: standard function %s has failed\n", func_name))
 #define print_message(message) (printf("%s", message));
 
 #define perror_message1(func_name) (fprintf(stderr, "Error: standard function %s has failed\n", func_name); properties[1] = 1; return NULL;)
+#define BEST "best"
+#define BESTval 5
 
 typedef struct Coord {
 	int i_coord;
@@ -81,11 +94,19 @@ typedef struct Move {
 } Move;
 
 typedef struct chessMove {
+	char toolType;
 	Coord src;
 	Coord dst;
-	char eaten;
+	int eaten;  //0 if no captures made. else the char that represents the eaten piece
+	int promote; //0 if no promotion needed. else the char that represents the new promoted piece
 	struct chessMove *next;
 } cMove;
+
+/*typedef struct chessMoveArray {
+	cMove *arr;
+	int length;
+	int nonEmptyNum;
+} chessMoveArr;*/
 
 
 void print_board(char **);

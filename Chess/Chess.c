@@ -22,19 +22,21 @@ Functions that are labeled:
 #include "Chess.h"
 
 
-int properties[5] = { 1, 0, 1, 0, 0 };
+int properties[6] = { 1, 0, 1, 0, 0, 0 };
 /*	'settings'		0
 'quit'				1
 'minimax_depth'		2
 'player color'		3
 'current player'	4
+'game mode'			5
 
 the initial state of the global properties array:
 properties[0] = 1;	//Setting state
 properties[1] = 0;	//Don't quit
 properties[2] = 1;	//Default minimax depth
 properties[3] = 0;	//Default player color white
-properties[4] =0 //It is now white's\black's turn: 0 for white, 1 for black
+properties[4] = 0 //It is now white's\black's turn: 0 for white, 1 for black
+properties[5] = 1;	//Default game mode is "two players mode"
 */
 const char *constWhite = "white";
 const char *constBlack = "black";
@@ -262,7 +264,7 @@ void printMovesList(cMove *move)
 /*CONVD*/
 Move *createMove(Coord src, Coord dst, char eaten)
 {
-	cMove *move = (cMove *) calloc(1, sizeof(cMove)); //TODO:cast like that in all allocs
+	cMove *move = (cMove *)calloc(1, sizeof(cMove)); //TODO:cast like that in all allocs
 	if (move == NULL) // safety
 	{
 		if (!properties[1])
@@ -270,10 +272,10 @@ Move *createMove(Coord src, Coord dst, char eaten)
 		properties[1] = 1;
 		return NULL;
 	}
-	
+
 	(move->src).i_coord = src.i_coord;
 	(move->src).j_coord = src.j_coord;
-	
+
 	(move->dst).i_coord = dst.i_coord;
 	(move->dst).j_coord = dst.j_coord;
 
@@ -446,11 +448,12 @@ int isInBoard(Coord coord)
 }
 
 /*CONVD*/
-/*return 1 if c is either 'm', 'k', 'M', or 'K', otherwise 0.*/
+//TODO: change next line
+/*return 1 if c is either 'm', 'k', 'M', 'K'etc.; otherwise 0.*/
 int isTool(char c)
 {
 	if (c == WHITE_P || c == WHITE_B || c == WHITE_N || c == WHITE_R
-		|| c == WHITE_Q || c == WHITE_K || c == BLACK_P || c == BLACK_B||
+		|| c == WHITE_Q || c == WHITE_K || c == BLACK_P || c == BLACK_B ||
 		c == BLACK_N || c == BLACK_R || c == BLACK_Q || c == BLACK_K){
 		return 1;
 	}
@@ -495,7 +498,7 @@ void setSlotInBoard(board_t board, Coord slot, char ch)
 {
 	/*if (anointAKing(slot.j_coord, ch))
 		board[slot.i_coord][slot.j_coord] = getCorrespondingKing(ch);
-	else*/
+		else*/
 	board[slot.i_coord][slot.j_coord] = ch;
 }
 
@@ -705,8 +708,10 @@ int IsAlly(char tool, char myColor)
 	return 0;
 }
 
-/*returns all moves that a player may do with the specific configuration of the board (filtered).*/
-cMove *getMoves(board_t board, int player)
+
+/*DCLR*/
+/*returns all moves that the tool in coord may do with the specific configuration of the board.*/
+cMove *GetMovesOfTool(board_t board, Coord coord)
 {
 	Move *allMoves = NULL, *tmpMoves, *tmpMovesEnd;
 	Coord coord;
@@ -720,7 +725,7 @@ cMove *getMoves(board_t board, int player)
 			/*it is an ally:*/
 		{
 			tmpMoves = movesByPieceType(board, coord);
-			
+
 			tmpMovesEnd = tmpMoves;
 			if (tmpMovesEnd != NULL)
 			{
@@ -741,7 +746,330 @@ cMove *getMoves(board_t board, int player)
 	}*/
 
 	allMoves = (cMove *)filterOutMoves(allMoves);
+
+	//if (DEBUG)
+	//{
+	//	//printf("\nafter filtering moves list was:\n");
+	//	printMovesList(allMoves);
+	//	printf("\n");
+	//}
+
+	return allMoves;
+}
+
+/*add a new move in the beginning of the linked list*/
+cMove * AddMove(cMove **head, char toolType, Coord src, Coord dst, int eater, int promote)
+{
+	cMove *newMove = (cMove*)calloc(1, sizeof(cMove));
+	newMove->toolType = toolType;
+	newMove->src = src;
+	newMove->dst = dst;
+	newMove->eater = eater;
+	newMove->promote = promote;
+	newMove->next = *head;
+	*head = newMove;
+	return *head;
+}
+
+
+int DoesCrdContainsEnemy(board_t board, Coord coord, char tool)
+{
+	char c = GetContentOfCoord(board, coord);
+	if (c == EMPTY)
+		return 0;
+	if (islower(tool))
+	{
+		if (iswlower(c))
+			return 0;
+		else
+			return 1;
+	}
+	else
+	{
+		if (islower(c))
+			return 1;
+		else
+			return 0;
+	}
+
+}
+
+
+cMove* PawnMoves(board_t board, Coord coord)
+{
+	cMove *head = (cMove*)calloc(1, sizeof(cMove));
+	int i = coord.i_coord, j = coord.j_coord;
+	char tool = GetContentOfCoord(board, coord);
+	int color = islower(tool) ? 1 : -1;
+	Coord tmpCoord = coord;
+
+	//no eating
+	tmpCoord.j_coord += color * 1;
+	if (isInBoard(tmpCoord) == 1 && isKingUnderThreat(board, coord, tmpCoord) && board[i][j + color * 1] == EMPTY)
+	{
+		if ((j + color * 1 == 7 && color == 1) || (j + color * 1 == 0 && color == -1)) //if promotion needed
+		{
+			AddMove(head,tool, coord, tmpCoord, 0, color == 1 ? 'r' : 'R');
+			AddMove(head, tool, coord, tmpCoord, 0, color == 1 ? 'b' : 'B');
+			AddMove(head, tool, coord, tmpCoord, 0, color == 1 ? 'q' : 'Q');
+			AddMove(head, tool, coord, tmpCoord, 0, color == 1 ? 'n' : 'N');
+		}
+		else
+			AddMove(head, tool, coord, tmpCoord, 0, 0);// if promotion isn't needed
+	}
 	
+
+	//south\north-west eating
+	tmpCoord = coord;
+	tmpCoord.i_coord -= color * 1;
+	tmpCoord.j_coord += color * 1;
+	if (isInBoard(tmpCoord) == 1 && isKingUnderThreat(board, coord, tmpCoord) && DoesCrdContainsEnemy(board, coord, tool))
+	{
+		if ((j + color * 1 == 7 && color == 1) || (j + color * 1 == 0 && color == -1)) //if promotion needed
+		{
+			AddMove(head, tool, coord, tmpCoord, 0, color == 1 ? 'r' : 'R');
+			AddMove(head, tool, coord, tmpCoord, 0, color == 1 ? 'b' : 'B');
+			AddMove(head, tool, coord, tmpCoord, 0, color == 1 ? 'q' : 'Q');
+			AddMove(head, tool, coord, tmpCoord, 0, color == 1 ? 'n' : 'N');
+		}
+		else
+			AddMove(head, tool, coord, tmpCoord, 0, 0);// if promotion isn't needed
+	}
+
+
+	//south\north-east eating
+	tmpCoord = coord;
+	tmpCoord.i_coord += color * 1;
+	tmpCoord.j_coord += color * 1;
+	if (isInBoard(tmpCoord) == 1 && && isKingUnderThreat(board, coord, tmpCoord)  && DoesCrdContainsEnemy(board, coord, tool))
+	{
+		if ((j + color * 1 == 7 && color == 1) || (j + color * 1 == 0 && color == -1)) //if promotion needed
+		{
+			AddMove(head, tool, coord, tmpCoord, 0, color == 1 ? 'r' : 'R');
+			AddMove(head, tool, coord, tmpCoord, 0, color == 1 ? 'b' : 'B');
+			AddMove(head, tool, coord, tmpCoord, 0, color == 1 ? 'q' : 'Q');
+			AddMove(head, tool, coord, tmpCoord, 0, color == 1 ? 'n' : 'N');
+		}
+		else
+			AddMove(head, tool, coord, tmpCoord, 0, 0);// if promotion isn't needed
+	}
+}
+
+void BishopMoves(char** board, int get_move_call, int i, int j, moves_list *head, int color){
+	int k = 1;
+	while (IsValidSquare(i + k, j + k) == 1) {
+		if (Color(board, i + k, j + k) == color * -1){
+			AddMove(board, color, get_move_call, i, j, i + k, j + k, head, 0);
+			break;
+		} if (board[i + k][j + k] == EMPTY){
+			AddMove(board, color, get_move_call, i, j, i + k, j + k, head, 0);
+			k++;
+		}
+		else
+			break;
+	}
+	k = 1;
+	while (IsValidSquare(i - k, j + k) == 1) {
+		if (Color(board, i - k, j + k) == color * -1){
+			AddMove(board, color, get_move_call, i, j, i - k, j + k, head, 0);
+			break;
+		} if (board[i - k][j + k] == EMPTY){
+			AddMove(board, color, get_move_call, i, j, i - k, j + k, head, 0);
+			k++;
+		}
+		else
+			break;
+	}
+	k = 1;
+	while (IsValidSquare(i + k, j - k) == 1) {
+		if (Color(board, i + k, j - k) == color * -1){
+			AddMove(board, color, get_move_call, i, j, i + k, j - k, head, 0);
+			break;
+		} if (board[i + k][j - k] == EMPTY){
+			AddMove(board, color, get_move_call, i, j, i + k, j - k, head, 0);
+			k++;
+		}
+		else
+			break;
+	}
+	k = 1;
+	while (IsValidSquare(i - k, j - k) == 1) {
+		if (Color(board, i - k, j - k) == color * -1){
+			AddMove(board, color, get_move_call, i, j, i - k, j - k, head, 0);
+			break;
+		} if (board[i - k][j - k] == EMPTY){
+			AddMove(board, color, get_move_call, i, j, i - k, j - k, head, 0);
+			k++;
+		}
+		else
+			break;
+	}
+}
+
+void RookMoves(char** board, int get_move_call, int i, int j, moves_list *head, int color){
+	int k = 1;
+	while (IsValidSquare(i, j + k) == 1) {
+		if (Color(board, i, j + k) == color * -1){
+			AddMove(board, color, get_move_call, i, j, i, j + k, head, 0);
+			break;
+		} if (board[i][j + k] == EMPTY){
+			AddMove(board, color, get_move_call, i, j, i, j + k, head, 0);
+			k++;
+		}
+		else
+			break;
+	}
+	k = 1;
+	while (IsValidSquare(i, j - k) == 1) {
+		if (Color(board, i, j - k) == color * -1){
+			AddMove(board, color, get_move_call, i, j, i, j - k, head, 0);
+			break;
+		} if (board[i][j - k] == EMPTY){
+			AddMove(board, color, get_move_call, i, j, i, j - k, head, 0);
+			k++;
+		}
+		else
+			break;
+	}
+	k = 1;
+	while (IsValidSquare(i + k, j) == 1) {
+		if (Color(board, i + k, j) == color * -1){
+			AddMove(board, color, get_move_call, i, j, i + k, j, head, 0);
+			break;
+		} if (board[i + k][j] == EMPTY){
+			AddMove(board, color, get_move_call, i, j, i + k, j, head, 0);
+			k++;
+		}
+		else
+			break;
+	}
+	k = 1;
+	while (IsValidSquare(i - k, j) == 1) {
+		if (Color(board, i - k, j) == color * -1){
+			AddMove(board, color, get_move_call, i, j, i - k, j, head, 0);
+			break;
+		} if (board[i - k][j] == EMPTY){
+			AddMove(board, color, get_move_call, i, j, i - k, j, head, 0);
+			k++;
+		}
+		else
+			break;
+	}
+}
+
+void KnightMoves(char** board, int get_move_call, int i, int j, moves_list *head, int color){
+	if ((IsValidSquare(i + 2, j + 1) == 1) && ((board[i + 2][j + 1] == EMPTY) || (Color(board, i + 2, j + 1) == color*-1))){
+		AddMove(board, color, get_move_call, i, j, i + 2, j + 1, head, 0);
+	}
+	if ((IsValidSquare(i + 2, j - 1) == 1) && ((board[i + 2][j - 1] == EMPTY) || (Color(board, i + 2, j - 1) == color*-1))){
+		AddMove(board, color, get_move_call, i, j, i + 2, j - 1, head, 0);
+	}
+	if ((IsValidSquare(i + 1, j + 2) == 1) && ((board[i + 1][j + 2] == EMPTY) || (Color(board, i + 1, j + 2) == color*-1))){
+		AddMove(board, color, get_move_call, i, j, i + 1, j + 2, head, 0);
+	}
+	if ((IsValidSquare(i - 1, j + 2) == 1) && ((board[i - 1][j + 2] == EMPTY) || (Color(board, i - 1, j + 2) == color*-1))){
+		AddMove(board, color, get_move_call, i, j, i - 1, j + 2, head, 0);
+	}
+	if ((IsValidSquare(i - 2, j + 1) == 1) && ((board[i - 2][j + 1] == EMPTY) || (Color(board, i - 2, j + 1) == color*-1))){
+		AddMove(board, color, get_move_call, i, j, i - 2, j + 1, head, 0);
+	}
+	if ((IsValidSquare(i - 2, j - 1) == 1) && ((board[i - 2][j - 1] == EMPTY) || (Color(board, i - 2, j - 1) == color*-1))){
+		AddMove(board, color, get_move_call, i, j, i - 2, j - 1, head, 0);
+	}
+	if ((IsValidSquare(i + 1, j - 2) == 1) && ((board[i + 1][j - 2] == EMPTY) || (Color(board, i + 1, j - 2) == color*-1))){
+		AddMove(board, color, get_move_call, i, j, i + 1, j - 2, head, 0);
+	}
+	if ((IsValidSquare(i - 1, j - 2) == 1) && ((board[i - 1][j - 2] == EMPTY) || (Color(board, i - 1, j - 2) == color*-1))){
+		AddMove(board, color, get_move_call, i, j, i - 1, j - 2, head, 0);
+	}
+}
+
+void KingMoves(char** board, int get_move_call, int i, int j, moves_list *head, int color){
+	if (IsValidSquare(i, j + 1) == 1 && (board[i][j + 1] == EMPTY || Color(board, i, j + 1) == color*-1)){
+		AddMove(board, color, get_move_call, i, j, i, j + 1, head, 0);
+	}
+	if (IsValidSquare(i, j - 1) == 1 && (board[i][j - 1] == EMPTY || Color(board, i, j - 1) == color*-1)){
+		AddMove(board, color, get_move_call, i, j, i, j - 1, head, 0);
+	}
+	if (IsValidSquare(i + 1, j) == 1 && (board[i + 1][j] == EMPTY || Color(board, i + 1, j) == color*-1)){
+		AddMove(board, color, get_move_call, i, j, i + 1, j, head, 0);
+	}
+	if (IsValidSquare(i - 1, j) == 1 && (board[i - 1][j] == EMPTY || Color(board, i - 1, j) == color*-1)){
+		AddMove(board, color, get_move_call, i, j, i - 1, j, head, 0);
+	}
+	if (IsValidSquare(i + 1, j + 1) == 1 && (board[i + 1][j + 1] == EMPTY || Color(board, i + 1, j + 1) == color*-1)){
+		AddMove(board, color, get_move_call, i, j, i + 1, j + 1, head, 0);
+	}
+	if (IsValidSquare(i + 1, j - 1) == 1 && (board[i + 1][j - 1] == EMPTY || Color(board, i + 1, j - 1) == color*-1)){
+		AddMove(board, color, get_move_call, i, j, i + 1, j - 1, head, 0);
+	}
+	if (IsValidSquare(i - 1, j + 1) == 1 && (board[i - 1][j + 1] == EMPTY || Color(board, i - 1, j + 1) == color*-1)){
+		AddMove(board, color, get_move_call, i, j, i - 1, j + 1, head, 0);
+	}
+	if (IsValidSquare(i - 1, j - 1) == 1 && (board[i - 1][j - 1] == EMPTY || Color(board, i - 1, j - 1) == color*-1)){
+		AddMove(board, color, get_move_call, i, j, i - 1, j - 1, head, 0);
+	}
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+/*returns all moves that a player may do with the specific configuration of the board (filtered).*/
+cMove *getMoves(board_t board, int player)
+{
+	Move *allMoves = NULL, *tmpMoves, *tmpMovesEnd;
+	Coord coord;
+	int ally;
+	for (int k = 0; k < BOARD_SIZE*BOARD_SIZE && properties[1] != 1; k++)
+	{
+		coord.i_coord = (int)mod(k, BOARD_SIZE);
+		coord.j_coord = k / BOARD_SIZE; /*(int)floor(k / BOARD_SIZE);*/
+		ally = IsAlly(GetContentOfCoord(board, coord), player);
+		if (ally)
+			/*it is an ally:*/
+		{
+			tmpMoves = movesByPieceType(board, coord);
+
+			tmpMovesEnd = tmpMoves;
+			if (tmpMovesEnd != NULL)
+			{
+				while (tmpMovesEnd->next != NULL)
+				{
+					tmpMovesEnd = tmpMovesEnd->next;
+				}
+				tmpMovesEnd->next = allMoves;
+				allMoves = tmpMoves;
+			}
+		}
+		ally = 0;
+	}
+	/*if (DEBUG)
+	{
+	printf("\nbefore filtering moves list was:\n");
+	printMovesList(allMoves);
+	}*/
+
+	allMoves = (cMove *)filterOutMoves(allMoves);
+
 	//if (DEBUG)
 	//{
 	//	//printf("\nafter filtering moves list was:\n");
@@ -816,13 +1144,21 @@ void setSlot(board_t board, char *horiz, char *vert, char type)
 	coord.i_coord = i; coord.j_coord = j;
 	if (isTool(type) || type == EMPTY)
 	{
+		
 		if (isInBoard(coord) && mod(i + j, 2) == 0)
 		{
-			board[i][j] = type;
-			if (isWhite(type) == 1 && coord.j_coord == BOARD_SIZE - 1)
-				board[i][j] = WHITE_K;
-			if (isWhite(type) == 0 && type != EMPTY && coord.j_coord == 0)
-				board[i][j] = BLACK_K;
+			if (NotTooManyOfType(board, type))
+			{
+				board[i][j] = type;
+				if (isWhite(type) == 1 && coord.j_coord == BOARD_SIZE - 1)
+					board[i][j] = WHITE_K;
+				if (isWhite(type) == 0 && type != EMPTY && coord.j_coord == 0)
+					board[i][j] = BLACK_K;
+			}
+			else
+			{
+				printf(NO_PIECE);
+			}
 		}
 
 		else
@@ -833,6 +1169,56 @@ void setSlot(board_t board, char *horiz, char *vert, char type)
 
 	}
 }
+
+
+/*DCLR*/
+/*return the number of tools of the given type that appear on the board*/
+int CountToolsOfType(board_t board, char type)
+{
+	int counter = 0;
+	for (int i = 0; i < BOARD_SIZE; i++)
+		for (int j = 0; j < BOARD_SIZE; j++)
+			if (board[i][j] == type)
+				counter++;
+	return counter;
+}
+
+/*DCLR*/
+/*return 1 if the number of tools of the given type doesn't exceed the legal number and 0 otherwise*/
+int NotTooManyOfType(board_t board, char type)
+{
+	int result = 0;
+	int numberOfTools = CountToolsOfType(board, type);
+	switch (type)
+	{
+	case WHITE_P:
+	case BLACK_P:
+		if (numberOfTools < 8)
+			result = 1;
+		break;
+	case WHITE_B:
+	case BLACK_B:
+	case WHITE_N:
+	case BLACK_N:
+	case WHITE_R:
+	case BLACK_R:
+		if (numberOfTools < 2)
+			result = 1;
+		break;
+	case WHITE_Q:
+	case BLACK_Q:
+	case WHITE_K:
+	case BLACK_K:
+		if (numberOfTools < 1)
+			result = 1;
+		break;
+
+	default:
+		break;
+	}
+	return result;
+}
+
 
 /* DEBUG
 sets a given board by a given configuration represented by a string.*/
@@ -954,10 +1340,11 @@ int score(board_t board, char player)
 	return score;
 }
 
-/*returns 1 if type is 'm' or 'k' and 0 otherwise.*/
+/*returns 1 if type is white and 0 otherwise.*/
 int isWhite(char type)
 {
-	if (type == WHITE_K || type == WHITE_M)
+
+	if (type == WHITE_R || type == WHITE_N || WHITE_B || WHITE_K || WHITE_Q || WHITE_P)
 		return 1;
 	return 0;
 }
@@ -1226,14 +1613,14 @@ board_t GenerateRandomConfiguration()
 	brd = createBoard();
 	//initialize places array
 	for (int i = 0; i < BOARD_SIZE; i++)
-	for (int j = 0; j < BOARD_SIZE; j++)
-	{
-		if ((i + j) % 2 == 0)
+		for (int j = 0; j < BOARD_SIZE; j++)
 		{
-			places[index] = i * 10 + j;
-			index++;
+			if ((i + j) % 2 == 0)
+			{
+				places[index] = i * 10 + j;
+				index++;
+			}
 		}
-	}
 	assert(index == numberOfFreePlaces);
 
 	//set white tools:
@@ -1388,25 +1775,32 @@ int Parse(char *line, board_t board)
 	properties[2] = Default minimax depth
 	properties[3] = User color: 0 for default white, 1 for black
 	properties[4] = It is now white's\black's turn: 0 for white, 1 for black
+	properties[5] = game mode
 
 
 	*/
 
-	const char *cmmd1 = "minimax_depth";
-	const char *cmmd2 = "user_color";
-	const char *cmmd3 = "clear";
-	const char *cmmd4 = "rm";
-	const char *cmmd5 = "set";
-	const char *cmmd6 = "print";
-	const char *cmmd7 = "quit";
-	const char *cmmd8 = "start";
-	const char *cmmd9 = "move";
-	const char *cmmd10 = "get_moves";
+	const char *cmmd1 = "game_mode";
+	const char *cmmd2 = "difficulty";
+	const char *cmmd3 = "user_color";
+	const char *cmmd4 = "load";
+	const char *cmmd5 = "clear";
+	const char *cmmd6 = "next_player";
+	const char *cmmd7 = "rm";
+	const char *cmmd8 = "set";
+	const char *cmmd9 = "print";
+	const char *cmmd10 = "quit";
+	const char *cmmd11 = "start";
+	const char *cmmd12 = "move";
+	const char *cmmd13 = "get_moves";
+	const char *cmmd14 = "get_best_moves";
+	const char *cmmd15 = "get_score";
+	const char *cmmd16 = "save";
 
 	const char *white = "white";
 	const char *black = "black";
-	const char *man = "m";
-	const char *king = "k";
+	//const char *man = "m";
+	//const char *king = "k";
 
 
 	if (properties[0])
@@ -1415,9 +1809,49 @@ int Parse(char *line, board_t board)
 		char *token = strtok(line, " \n");
 
 		if (strcmp(token, cmmd1) == 0)
-			//minimax depth
+			//game mode
 		{
 			token = strtok(NULL, " ");
+			long mode = strtol(token, &token, BOARD_SIZE);
+			if (mode == 1 || mode == 2)
+			{
+				properties[5] = (int)mode;
+				if (mode == 1)
+					prinft("%s", TWO_PLAYERS_GAME_MODE);
+				else
+					prinft("%s", PLAYER_VS_AI_GAME_MODE);
+			}
+			else
+			{
+				if (!properties[1])
+				{
+					printf(WRONG_GAME_MODE);
+					properties[5] = 1;
+				}
+			}
+
+			/*if (DEBUG)
+			printf("\nUpon updading minimax_depth, it is now %d\n", properties[2]);*/
+			return 0;
+		}
+
+
+		else if (strcmp(token, cmmd2) == 0)
+			//difficulty
+		{
+			if (properties[5] == 1)
+			{
+				printf("%s", ILLEGAL_COMMAND);
+				return 0;
+			}
+
+
+			token = strtok(NULL, " ");
+			if (strcmp(token, BEST))
+			{
+				properties[2] = BESTval;//5 stands for best
+				return 0;
+			}
 			long depth = strtol(token, &token, BOARD_SIZE);
 			if (depth > 0 && depth < 7)
 				properties[2] = (int)depth;
@@ -1432,30 +1866,55 @@ int Parse(char *line, board_t board)
 			return 0;
 		}
 
-		else if (strcmp(token, cmmd2) == 0)
+
+		else if (strcmp(token, cmmd3) == 0)
 			//player color
 		{
+			if (properties[5] == 1)
+			{
+				printf("%s", ILLEGAL_COMMAND);
+				return 0;
+			}
 			token = strtok(NULL, " \n");
 			if (strcmp(token, white) == 0)
 				properties[3] = 0;
 			else if (strcmp(token, black) == 0)
 				properties[3] = 1;
-			else
-			{
-				if (!properties[1])
-					printf(WRONG_PLAYER_COLOR);
-			}
 			return 0;
 		}
 
-		else if (strcmp(token, cmmd3) == 0)
+		else if (strcmp(token, cmmd4) == 0)
+			//load
+		{
+			token = strtok(NULL, " \n");
+			LoadFromFile(token, board);
+			return 0;
+		}
+		
+
+		else if (strcmp(token, cmmd5) == 0)
 			//clear
 		{
 			clearBoard(board);
 			return 0;
 		}
 
-		else if (strcmp(token, cmmd4) == 0)
+		else if (strcmp(token, cmmd6) == 0)
+			//next player
+		{
+			token = strtok(NULL, " \n");
+			if (strcmp(token, black) == 0)
+				properties[4] = 1;
+			else
+				properties[4] = 0;
+
+			/*if (DEBUG)
+			printf("\nUpon updating next player, it is now %d\n", properties[4]);*/
+			return 0;
+		}
+
+
+		else if (strcmp(token, cmmd7) == 0)
 			//remove
 		{
 			char *horiz, *vert;
@@ -1466,7 +1925,9 @@ int Parse(char *line, board_t board)
 			setSlot(board, horiz, vert, EMPTY);
 			return 0;
 		}
-		else if (strcmp(token, cmmd5) == 0)
+
+
+		else if (strcmp(token, cmmd8) == 0)
 			//set
 		{
 			char *horiz, *vert, *color, *type, tool;
@@ -1483,27 +1944,44 @@ int Parse(char *line, board_t board)
 			token = strtok(NULL, " \n");
 			type = token;
 
+
 			if (strcmp(color, white) == 0)
 			{
-				if (strcmp(type, man) == 0)
-					tool = WHITE_M;
-				else if (strcmp(type, king) == 0)
+				if (strcmp(type, KING) == 0)
 					tool = WHITE_K;
+				else if (strcmp(type, QUEEN) == 0)
+					tool = WHITE_Q;
+				else if (strcmp(type, ROOK) == 0)
+					tool = WHITE_R;
+				else if (strcmp(type, KNIGHT) == 0)
+					tool = WHITE_N;
+				else if (strcmp(type, BISHOP) == 0)
+					tool = WHITE_B;
+				else if (strcmp(type, PAWN) == 0)
+					tool = WHITE_P;
 				else
 				{
 					{
 						if (!properties[1])
-						printf(ILLEGAL_COMMAND);
+							printf(ILLEGAL_COMMAND);
 						return 0;
 					}
 				}
 			}
 			else if (strcmp(color, black) == 0)
 			{
-				if (strcmp(type, man) == 0)
-					tool = BLACK_M;
-				else if (strcmp(type, king) == 0)
+				if (strcmp(type, KING) == 0)
 					tool = BLACK_K;
+				else if (strcmp(type, QUEEN) == 0)
+					tool = BLACK_Q;
+				else if (strcmp(type, ROOK) == 0)
+					tool = BLACK_R;
+				else if (strcmp(type, KNIGHT) == 0)
+					tool = BLACK_N;
+				else if (strcmp(type, BISHOP) == 0)
+					tool = BLACK_B;
+				else if (strcmp(type, PAWN) == 0)
+					tool = BLACK_P;
 				else
 				{
 					if (!properties[1])
@@ -1522,39 +2000,25 @@ int Parse(char *line, board_t board)
 			return 0;
 		}
 
-		else if (strcmp(token, cmmd6) == 0)
+
+
+		else if (strcmp(token, cmmd9) == 0)
 			//print
 		{
 			print_board(board);
 			return 0;
 		}
 
-		else if (strcmp(token, cmmd7) == 0)
+		else if (strcmp(token, cmmd10) == 0)
 			//quit
 		{
 			properties[1] = 1;
 			return 0;
 		}
-		else if (strcmp(token, cmmd8) == 0)
+		else if (strcmp(token, cmmd11) == 0)
 			//start
-		{
-			Coord coord;
-			int nWhite = 0, nBlack = 0;
-			for (int k = 0; k < BOARD_SIZE*BOARD_SIZE; k++)
-			{
-				coord.i_coord = (int)mod(k, BOARD_SIZE);
-				coord.j_coord = k / BOARD_SIZE;
-				if (isTool(GetContentOfCoord(board, coord)))
-				{
-					char content = GetContentOfCoord(board, coord);
-					if (content == WHITE_K || content == WHITE_M)
-						nWhite++;
-					if (content == BLACK_K || content == BLACK_M)
-						nBlack++;
-				}
-			}
-			if (nWhite == 0 || nWhite > MAX_NUMBER_OF_TOOLS_PER_PLAYER
-				|| nBlack == 0 || nBlack > MAX_NUMBER_OF_TOOLS_PER_PLAYER)
+		{			
+			if (CountToolsOfType(board, WHITE_K)<1 || CountToolsOfType(board, BLACK_K)<1)
 			{
 				if (!properties[1])
 					printf(WROND_BOARD_INITIALIZATION);
@@ -1571,6 +2035,9 @@ int Parse(char *line, board_t board)
 		return 0;
 
 	}
+
+
+
 	else
 		/*Game State*/
 	{
@@ -1582,7 +2049,7 @@ int Parse(char *line, board_t board)
 			return 0;
 		}
 
-		else if (strcmp(token, cmmd9) == 0)
+		else if (strcmp(token, cmmd12) == 0)
 			//move
 		{
 			token = strtok(NULL, "&");
@@ -1596,7 +2063,7 @@ int Parse(char *line, board_t board)
 			if (!isLegalInitialPosition(token, board))//if position <x, y> does not contain a disc of the user's color
 			{
 				if (!properties[1])
-					printf(NO_DICS);
+					printf(NOT_YOUR_PIECE);
 				return 1;
 			}
 			legalMove = (Move *)isLegalMove(token, board, pMove);
@@ -1624,9 +2091,64 @@ int Parse(char *line, board_t board)
 
 }
 
+
+/*DCLR*/
+char ToolNameToChar(char *toolFullName)
+{
+	char toolFirstChar = *toolFullName;
+	switch (toolFirstChar)
+	{
+	case 'b':
+		return 'b';
+	case 'k':
+		return 'n';
+	case 'r':
+		return 'r';
+	case 'q':
+		return 'q';
+	default:
+		break;
+	}
+	return '\0';
+	
+}
+
 /*return NULL if the move is illegal, and a pointer to the move otherwise*/
 Move* isLegalMove(char *token, board_t board, Move *allPossibleMoves)
 {
+	char *currentPosition = token;
+	char x_coor, i_coor;
+	int y_coor, j_coor;
+	int promoteNeeded = 0;
+	char promoteTo='\0';
+	char tool;
+	Coord source, dest;
+	
+
+	//fill coordinates
+	x_coor = *(currentPosition + 1);
+	currentPosition += 3;
+	y_coor = (int)strtol(currentPosition, &currentPosition, 10);
+	graphicCoordToRealCoord(&source, x_coor, y_coor);
+	currentPosition += 6;
+	i_coor = *currentPosition;
+	currentPosition += 3;
+	j_coor = (int)strtol(currentPosition, &currentPosition, 10);
+	graphicCoordToRealCoord(&dest, i_coor, j_coor);
+
+	//check if promotion needed
+	if (*(currentPosition + 1) != '\n') //if  promotion needed
+	{
+		currentPosition += 2;
+		promoteTo = ToolNameToChar(currentPosition);
+		if (isupper(GetContentOfCoord(board, source)))
+			promoteTo = toupper(promoteTo);
+	}
+
+
+	
+
+
 	char *currentPosition = token;
 	char x_coor;
 	int y_coor;
@@ -1680,12 +2202,12 @@ Move* isLegalMove(char *token, board_t board, Move *allPossibleMoves)
 			continue;
 		}
 		for (int i = 0; i <= index; i++)
-		if (route[i].i_coord != allPossibleMoves->route[i].i_coord ||
-			route[i].j_coord != allPossibleMoves->route[i].j_coord)
-		{
-			difference = 1;
-			break;
-		}
+			if (route[i].i_coord != allPossibleMoves->route[i].i_coord ||
+				route[i].j_coord != allPossibleMoves->route[i].j_coord)
+			{
+				difference = 1;
+				break;
+			}
 		if (difference == 0)//if a legal move has been found
 			return allPossibleMoves;
 		allPossibleMoves = allPossibleMoves->next;
@@ -1694,6 +2216,7 @@ Move* isLegalMove(char *token, board_t board, Move *allPossibleMoves)
 
 }
 
+/*CONVED*/
 /*token is a part of the command the used inserted and should represent all valid coordinations.
 returns 1 if truly all coords are valid and 0 otherwise.*/
 int areAllCoordsValid(char *token)
@@ -1711,7 +2234,7 @@ int areAllCoordsValid(char *token)
 			currentPosition += 3;
 			y_coor = (int)strtol(currentPosition, &currentPosition, 10);
 			graphicCoordToRealCoord(&crd, x_coor, y_coor);
-			if (!isInBoard(crd) || (crd.i_coord + crd.j_coord) % 2 != 0)
+			if (!isInBoard(crd))
 				return 0;
 		}
 		else
@@ -1737,7 +2260,7 @@ int isLegalInitialPosition(char *token, board_t board)
 			currentPosition += 3;
 			y_coor = (int)strtol(currentPosition, &currentPosition, 10);
 			graphicCoordToRealCoord(&coord, x_coor, y_coor);
-			if (GetContentOfCoord(board, coord) == EMPTY || IsEnemy(GetContentOfCoord(board, coord), (properties[3]) ? BLACK_M : WHITE_M)) //isWhite(GetContentOfCoord(board, coord)) == 1 - properties[3]) 
+			if (GetContentOfCoord(board, coord) == EMPTY || IsEnemy(GetContentOfCoord(board, coord), (properties[4]) ? BLACK_P : WHITE_P)) //isWhite(GetContentOfCoord(board, coord)) == 1 - properties[3]) 
 				return 0;
 			else
 				return 1;
@@ -1852,6 +2375,89 @@ int printWinner(int computerWins)
 
 }
 
+/*DCLR*/
+int LoadFromFile(char* file_path, board_t board){
+	int i, j;
+	char str[51], curTag;
+	FILE *file = fopen(file_path, "r");
+	if (file == NULL)
+	{
+		printf("%s", WRONG_FILE_NAME);
+		return 1;
+	}
+
+
+
+
+	//placing the file pointer on the first tag after <game> tag
+	for (i = 0; i < 5; i++)
+		fscanf(file, "%s", str);
+
+	if (*(str + 1) == 'n'){ //next turn
+		if (*(str + 11) == 'W')
+			properties[4] = 0;
+		else
+			properties[4] = 1;
+		//read next line
+		fscanf(file, "%s", str);
+	}
+
+	if (*(str + 1) == 'g'){ //game mode
+		properties[5] = *(str + 11) - '0';
+		//read next line
+		fscanf(file, "%s", str);
+	}
+	else
+		properties[5] = 1;
+
+
+	if (*(str + 1) == 'd'){ //difficulty (optional tag)
+		if (*(str + 12) == 'b')
+			properties[2] = 5;
+		else
+			properties[2] = *(str + 12) - '0';
+		//read next line
+		fscanf(file, "%s", str);
+	}
+	else
+		properties[2] = 1;
+
+
+	if (*(str + 1) == 'u'){ //user color (optional tag)
+		if (*(str + 12) == 'W')
+			properties[3] = 0;
+		else
+			properties[3] = 1;
+		//read next line
+		fscanf(file, "%s", str);
+	}
+	else
+		properties[3] = 1;
+	
+
+	//reading board slots:
+	for (j = BOARD_SIZE-1; j >= 0; j--){
+		fscanf(file, "%s", str);
+		for (i = 0; i < BOARD_SIZE; i++){
+			if (*(str + 7 + i) != '_')
+				board[i][j] = *(str + 7 + i);
+			else
+				board[i][j] = EMPTY;
+		}
+	}
+
+	fclose(file);
+	PrintBoard(board);
+	return 0;
+}
+
+
+
+
+
+
+
+
 /* UNUSED*/
 void quit(board_t brd, int freeBoard)
 {
@@ -1871,18 +2477,16 @@ int main()
 	//srand(time(NULL));
 	int parseResult = 0;
 	char* board[BOARD_SIZE];
-	char row0[BOARD_SIZE] = { ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ' };
-	char row1[BOARD_SIZE] = { ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ' };
-	char row2[BOARD_SIZE] = { ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ' };
-	char row3[BOARD_SIZE] = { ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ' };
-	char row4[BOARD_SIZE] = { ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ' };
-	char row5[BOARD_SIZE] = { ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ' };
-	char row6[BOARD_SIZE] = { ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ' };
-	char row7[BOARD_SIZE] = { ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ' };
-	char row8[BOARD_SIZE] = { ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ' };
-	char row9[BOARD_SIZE] = { ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ' };
+	char row0[BOARD_SIZE] = { ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ' };
+	char row1[BOARD_SIZE] = { ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ' };
+	char row2[BOARD_SIZE] = { ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ' };
+	char row3[BOARD_SIZE] = { ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ' };
+	char row4[BOARD_SIZE] = { ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ' };
+	char row5[BOARD_SIZE] = { ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ' };
+	char row6[BOARD_SIZE] = { ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ' };
+	char row7[BOARD_SIZE] = { ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ' };
 	board[0] = row0; board[1] = row1; board[2] = row2; board[3] = row3; board[4] = row4;
-	board[5] = row5; board[6] = row6; board[7] = row7; board[8] = row8; board[9] = row9;
+	board[5] = row5; board[6] = row6; board[7] = row7;
 
 	board_t brd = board;//= NULL; TODO: experiement
 	char *input = NULL;
@@ -1890,7 +2494,7 @@ int main()
 	Move *allPossibleMoves = NULL, *tmp;
 
 
-	printf(WELCOME_TO_DRAUGHTS);
+
 
 	//freeBoard = 0;// TODO: experiement
 	//brd = //createBoard(); TODO: experiement
@@ -1921,7 +2525,7 @@ int main()
 	/* One loop for both settings and game */
 	while (!properties[1])//while not quit
 	{
-		if (!properties[0] && (properties[4] != properties[3]))//if in game state and it is the computer's turn
+		if (properties[5] == 2 && !properties[0] && (properties[4] != properties[3]))//if in AI mode, in game state and it is the computer's turn
 		{
 			computerMove = NULL;
 			if (score(brd, getGenericTool(1)) == -100)//no legal move for the computer (computer lost)
@@ -1960,9 +2564,9 @@ int main()
 			}
 			continue;
 		}
-		else if (!properties[0] && (properties[4] == properties[3]))//if in game state and it is the player's turn
+		else if (!properties[0])
 		{
-			if (allPossibleMoves == NULL)
+			/*if (allPossibleMoves == NULL)
 			{
 				if (properties[3] == 0)//if player is white
 					allPossibleMoves = getMoves(brd, WHITE_M);
@@ -1982,8 +2586,13 @@ int main()
 					pMove = allPossibleMoves;
 				}
 				continue;
-			}
-			printf(ENTER_YOUR_MOVE);
+			}*/
+			if (properties[1]) //if quit
+				continue;
+			if (properties[4] == 0)
+				printf(WHT_ENTER_YOUR_MOVE);
+			else
+				prinft(BLK_ENTER_YOUR_MOVE);
 
 
 		}
@@ -1998,14 +2607,15 @@ int main()
 
 		if (parseResult == 10 || properties[1] == 1)// user has successfully inserted a valid move, we now want to free allPossibleMoves
 		{
-			tmp = allPossibleMoves;
+			/*tmp = allPossibleMoves;
 			while (allPossibleMoves != NULL)
 			{
 				allPossibleMoves = allPossibleMoves->next;
 				free(tmp->route);
 				free(tmp);
 				tmp = allPossibleMoves;
-			}
+			}*/
+			//change color of current player
 			properties[4] = 1 - properties[4];
 		}
 
